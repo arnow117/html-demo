@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>签字板 — Signature Pad</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --pad-height: 200px;
+    --pad-width: 800px;
+    --color-surface: #ffffff;
+    --color-border: #d1d5db;
+    --color-text: #1f2937;
+    --color-muted: #6b7280;
+    --color-accent: #2563eb;
+    --color-danger: #dc2626;
+    --color-bg: #f9fafb;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--color-bg);
+    color: var(--color-text);
+    min-height: 100dvh;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 880px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  header p {
+    font-size: 0.875rem;
+    color: var(--color-muted);
+  }
+
+  .pads {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 700px) {
+    .pads { flex-direction: column; }
+  }
+
+  .pad-card {
+    flex: 1;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .pad-card h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .pad-card .label-en {
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    font-weight: 400;
+  }
+
+  .canvas-wrapper {
+    position: relative;
+    width: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .canvas-wrapper canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .canvas-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    color: #d1d5db;
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+  }
+
+  .pad-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: #f3f4f6; }
+  .btn:active { background: #e5e7eb; }
+  .btn-danger { color: var(--color-danger); }
+  .btn-danger:hover { background: #fef2f2; border-color: #fecaca; }
+
+  .global-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .btn-primary {
+    background: var(--color-accent);
+    color: #fff;
+    border-color: var(--color-accent);
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-primary:active { background: #1e40af; }
+
+  .preview-section {
+    margin-top: 24px;
+    padding: 20px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    display: none;
+  }
+  .preview-section.visible { display: block; }
+  .preview-section h2 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .preview-images {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .preview-images figure {
+    flex: 1;
+    min-width: 200px;
+    text-align: center;
+  }
+  .preview-images img {
+    max-width: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: #fff;
+  }
+  .preview-images figcaption {
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    margin-top: 6px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2937;
+    color: #fff;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: 999;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>签字板 Signature Pad</h1>
+    <p>请在框内签名 · 支持手指触摸 · 签完后点「复制 Markdown」</p>
+  </header>
+
+  <div class="pads">
+    <div class="pad-card">
+      <h2>客户签字 <span class="label-en">Customer Signature</span></h2>
+      <div class="canvas-wrapper">
+        <canvas id="customer-canvas"></canvas>
+        <div class="canvas-placeholder" id="customer-placeholder">请在此签名</div>
+      </div>
+      <div class="pad-actions">
+        <button class="btn btn-danger" id="customer-clear">清除</button>
+      </div>
+    </div>
+
+    <div class="pad-card">
+      <h2>工程师签字 <span class="label-en">FE Signature</span></h2>
+      <div class="canvas-wrapper">
+        <canvas id="fe-canvas"></canvas>
+        <div class="canvas-placeholder" id="fe-placeholder">请在此签名</div>
+      </div>
+      <div class="pad-actions">
+        <button class="btn btn-danger" id="fe-clear">清除</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="global-actions">
+    <button class="btn btn-primary" id="btn-preview">生成签字图片</button>
+    <button class="btn" id="btn-copy">复制 Markdown</button>
+    <button class="btn" id="btn-download">下载 PNG</button>
+  </div>
+
+  <div class="preview-section" id="preview-section">
+    <h2>预览 Preview</h2>
+    <div class="preview-images" id="preview-images"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+  var CANVAS_WIDTH = 800;
+  var CANVAS_HEIGHT = 200;
+  var PEN_COLOR = '#000000';
+  var PEN_WIDTH = 2.5;
+
+  function SignaturePad(canvasId, placeholderId) {
+    var self = this;
+    this.canvas = document.getElementById(canvasId);
+    this.placeholder = document.getElementById(placeholderId);
+    this.ctx = this.canvas.getContext('2d');
+    this.canvas.width = CANVAS_WIDTH;
+    this.canvas.height = CANVAS_HEIGHT;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+
+    this.points = [];
+    this.currentStroke = [];
+    this.isDrawing = false;
+    this.isEmpty = true;
+    this.dataURL = null;
+
+    function getPos(e) {
+      var rect = self.canvas.getBoundingClientRect();
+      var scaleX = CANVAS_WIDTH / rect.width;
+      var scaleY = CANVAS_HEIGHT / rect.height;
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+
+    this.canvas.addEventListener('pointerdown', function(e) {
+      self.isDrawing = true;
+      var pos = getPos(e);
+      self.currentStroke = [pos];
+      self.points.push(self.currentStroke);
+      self.ctx.beginPath();
+      self.ctx.moveTo(pos.x, pos.y);
+      self.ctx.strokeStyle = PEN_COLOR;
+      self.ctx.lineWidth = PEN_WIDTH;
+      self.canvas.setPointerCapture(e.pointerId);
+    });
+
+    this.canvas.addEventListener('pointermove', function(e) {
+      if (!self.isDrawing) return;
+      e.preventDefault();
+      var pos = getPos(e);
+      self.currentStroke.push(pos);
+      var pts = self.currentStroke;
+      if (pts.length >= 3) {
+        var len = pts.length;
+        var xc = (pts[len - 2].x + pts[len - 1].x) / 2;
+        var yc = (pts[len - 2].y + pts[len - 1].y) / 2;
+        self.ctx.quadraticCurveTo(pts[len - 2].x, pts[len - 2].y, xc, yc);
+        self.ctx.stroke();
+        self.ctx.beginPath();
+        self.ctx.moveTo(xc, yc);
+      } else if (pts.length === 2) {
+        self.ctx.lineTo(pts[1].x, pts[1].y);
+        self.ctx.stroke();
+      }
+      if (self.isEmpty) {
+        self.isEmpty = false;
+        self.placeholder.style.display = 'none';
+      }
+    });
+
+    function endStroke() {
+      if (!self.isDrawing) return;
+      self.isDrawing = false;
+      self.ctx.beginPath();
+      self.dataURL = null;
+    }
+
+    this.canvas.addEventListener('pointerup', endStroke);
+    this.canvas.addEventListener('pointerleave', endStroke);
+    this.canvas.addEventListener('pointercancel', endStroke);
+
+    this.clear = function() {
+      self.ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      self.points = [];
+      self.currentStroke = [];
+      self.isDrawing = false;
+      self.isEmpty = true;
+      self.dataURL = null;
+      self.placeholder.style.display = 'flex';
+    };
+
+    this.isBlank = function() {
+      return self.isEmpty;
+    };
+
+    this.toDataURL = function() {
+      if (self.dataURL) return self.dataURL;
+      self.dataURL = self.canvas.toDataURL('image/png');
+      return self.dataURL;
+    };
+  }
+
+  var customerPad = new SignaturePad('customer-canvas', 'customer-placeholder');
+  var fePad = new SignaturePad('fe-canvas', 'fe-placeholder');
+
+  document.getElementById('customer-clear').addEventListener('click', function() { customerPad.clear(); });
+  document.getElementById('fe-clear').addEventListener('click', function() { fePad.clear(); });
+
+  function showToast(msg) {
+    var toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(function() { toast.classList.remove('show'); }, 2000);
+  }
+
+  document.getElementById('btn-preview').addEventListener('click', function() {
+    var customerBlank = customerPad.isBlank();
+    var feBlank = fePad.isBlank();
+    if (customerBlank && feBlank) {
+      showToast('请先在签名框中签字');
+      return;
+    }
+    var section = document.getElementById('preview-section');
+    var container = document.getElementById('preview-images');
+    while (container.firstChild) container.removeChild(container.firstChild);
+
+    if (!customerBlank) {
+      var fig = document.createElement('figure');
+      var img = document.createElement('img');
+      img.src = customerPad.toDataURL();
+      img.alt = '客户签字';
+      fig.appendChild(img);
+      var cap = document.createElement('figcaption');
+      cap.textContent = '客户签字 Customer Signature';
+      fig.appendChild(cap);
+      container.appendChild(fig);
+    }
+    if (!feBlank) {
+      var fig2 = document.createElement('figure');
+      var img2 = document.createElement('img');
+      img2.src = fePad.toDataURL();
+      img2.alt = '工程师签字';
+      fig2.appendChild(img2);
+      var cap2 = document.createElement('figcaption');
+      cap2.textContent = '工程师签字 FE Signature';
+      fig2.appendChild(cap2);
+      container.appendChild(fig2);
+    }
+    section.classList.add('visible');
+  });
+
+  function buildMarkdown() {
+    var customerBlank = customerPad.isBlank();
+    var feBlank = fePad.isBlank();
+    if (customerBlank && feBlank) {
+      showToast('请先在签名框中签字');
+      return null;
+    }
+    var md = '';
+    if (!customerBlank) {
+      md += '![客户签字](' + customerPad.toDataURL() + ')\n';
+    }
+    if (!feBlank) {
+      md += '![工程师签字](' + fePad.toDataURL() + ')\n';
+    }
+    md += '\n';
+    return md;
+  }
+
+  document.getElementById('btn-copy').addEventListener('click', function() {
+    var md = buildMarkdown();
+    if (!md) return;
+    try {
+      navigator.clipboard.writeText(md).then(function() {
+        showToast('Markdown 已复制到剪贴板');
+      });
+    } catch (e) {
+      var ta = document.createElement('textarea');
+      ta.value = md;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Markdown 已复制到剪贴板');
+    }
+  });
+
+  document.getElementById('btn-download').addEventListener('click', function() {
+    var pads = [
+      { pad: customerPad, name: 'customer-signature' },
+      { pad: fePad, name: 'fe-signature' }
+    ];
+    var downloaded = 0;
+    pads.forEach(function(item) {
+      if (item.pad.isBlank()) return;
+      var a = document.createElement('a');
+      a.href = item.pad.toDataURL();
+      a.download = item.name + '.png';
+      a.click();
+      downloaded++;
+    });
+    if (downloaded === 0) {
+      showToast('请先在签名框中签字');
+    } else {
+      showToast('已下载 ' + downloaded + ' 个签名文件');
+    }
+  });
+</script>
+</body>
+</html>
